@@ -3,6 +3,7 @@ import { getPlayerColor } from '../../shared/colors.ts';
 import {
   MAX_TURN_RATE_RAD_PER_SEC,
   MOVE_SPEED_CELLS_PER_SEC,
+  clampPointToArena,
   shortestAngleDiff,
   stepAngleToward,
 } from '../../shared/gameEngine.ts';
@@ -163,8 +164,9 @@ export function PaperCanvas({
           p.targetAngle,
           MAX_TURN_RATE_RAD_PER_SEC * dtSincePacket
         );
-        const targetX = p.x + Math.cos(predictedAngle) * MOVE_SPEED_CELLS_PER_SEC * dtSincePacket;
-        const targetY = p.y + Math.sin(predictedAngle) * MOVE_SPEED_CELLS_PER_SEC * dtSincePacket;
+        const rawTargetX = p.x + Math.cos(predictedAngle) * MOVE_SPEED_CELLS_PER_SEC * dtSincePacket;
+        const rawTargetY = p.y + Math.sin(predictedAngle) * MOVE_SPEED_CELLS_PER_SEC * dtSincePacket;
+        const { x: targetX, y: targetY } = clampPointToArena(rawTargetX, rawTargetY);
 
         const prevSmooth = smoothPosRef.current.get(p.numId);
         if (!prevSmooth || Math.hypot(targetX - prevSmooth.rx, targetY - prevSmooth.ry) > 2.5) {

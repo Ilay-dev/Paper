@@ -149,6 +149,38 @@ export function isPointInArena(x: number, y: number): boolean {
   return dx * dx + dy * dy <= limit * limit;
 }
 
+export function clampPointToArena(x: number, y: number): { x: number; y: number } {
+  let nx = Math.max(0.5, Math.min(GRID_WIDTH - 0.5, x));
+  let ny = Math.max(0.5, Math.min(GRID_HEIGHT - 0.5, y));
+  const dx = nx - ARENA_CENTER_X;
+  const dy = ny - ARENA_CENTER_Y;
+  const dist = Math.hypot(dx, dy);
+  const limit = ARENA_RADIUS - 0.35;
+  if (dist > limit && dist > 0) {
+    nx = ARENA_CENTER_X + (dx / dist) * limit;
+    ny = ARENA_CENTER_Y + (dy / dist) * limit;
+  }
+  const cx = Math.floor(nx);
+  const cy = Math.floor(ny);
+  if (
+    cx < 0 ||
+    cx >= GRID_WIDTH ||
+    cy < 0 ||
+    cy >= GRID_HEIGHT ||
+    ARENA_MASK[cy * GRID_WIDTH + cx] === 0
+  ) {
+    const safeLimit = ARENA_RADIUS - 0.75;
+    if (dist > 0) {
+      nx = ARENA_CENTER_X + (dx / dist) * safeLimit;
+      ny = ARENA_CENTER_Y + (dy / dist) * safeLimit;
+    } else {
+      nx = ARENA_CENTER_X;
+      ny = ARENA_CENTER_Y;
+    }
+  }
+  return { x: nx, y: ny };
+}
+
 export function encodeRle(data: Uint8Array): number[] {
   if (data.length === 0) return [];
   const out: number[] = [];
@@ -952,13 +984,27 @@ function getVisitedCellsForStep(
     const ty = dy !== 0 ? (byEdge - prevY) / dy : Infinity;
 
     if (tx <= ty) {
+      const bridgeIdx = prevCy * GRID_WIDTH + nextCx;
+      if (ARENA_MASK[bridgeIdx] === 1) {
+        return [
+          { cx: nextCx, cy: prevCy },
+          { cx: nextCx, cy: nextCy },
+        ];
+      }
       return [
-        { cx: nextCx, cy: prevCy },
+        { cx: prevCx, cy: nextCy },
+        { cx: nextCx, cy: nextCy },
+      ];
+    }
+    const bridgeIdx = nextCy * GRID_WIDTH + prevCx;
+    if (ARENA_MASK[bridgeIdx] === 1) {
+      return [
+        { cx: prevCx, cy: nextCy },
         { cx: nextCx, cy: nextCy },
       ];
     }
     return [
-      { cx: prevCx, cy: nextCy },
+      { cx: nextCx, cy: prevCy },
       { cx: nextCx, cy: nextCy },
     ];
   }
@@ -1000,20 +1046,11 @@ export function stepGameTick(game: InternalPaperGame): FastTickPacket {
     player.angle = stepAngleToward(player.angle, player.targetAngle, MAX_TURN_STEP_PER_TICK);
     const prevX = player.x;
     const prevY = player.y;
-    const nextX = prevX + Math.cos(player.angle) * MOVE_STEP_PER_TICK;
-    const nextY = prevY + Math.sin(player.angle) * MOVE_STEP_PER_TICK;
-
-    if (
-      nextX < 0 ||
-      nextX >= game.width ||
-      nextY < 0 ||
-      nextY >= game.height ||
-      !isPointInArena(nextX, nextY)
-    ) {
-      eliminatePlayer(game, player, null, 'wall');
-      territoryChanged = true;
-      continue;
-    }
+    const rawNextX = prevX + Math.cos(player.angle) * MOVE_STEP_PER_TICK;
+    const rawNextY = prevY + Math.sin(player.angle) * MOVE_STEP_PER_TICK;
+    const clamped = clampPointToArena(rawNextX, rawNextY);
+    const nextX = clamped.x;
+    const nextY = clamped.y;
 
     player.x = nextX;
     player.y = nextY;

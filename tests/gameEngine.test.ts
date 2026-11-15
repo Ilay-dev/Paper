@@ -112,7 +112,7 @@ describe('Paper.io Circular 360° Game Engine', () => {
     expect(p1.angle).toBeCloseTo(Math.PI / 2, 5);
   });
 
-  it('eliminates a player hitting the circular arena wall', () => {
+  it('blocks a player at the circular arena wall without dealing damage', () => {
     const game = createPaperGame([makeHuman(1), makeHuman(2)], 0, 'survival');
     const p1 = game.players[0];
     const p2 = game.players[1];
@@ -122,7 +122,8 @@ describe('Paper.io Circular 360° Game Engine', () => {
     resetPlayerDisk(game, p2.numId, 50, 80, 0);
 
     let wallDeath = false;
-    for (let t = 0; t < 20; t++) {
+    for (let t = 0; t < 25; t++) {
+      setPlayerTargetAngle(game, p1.id, 0);
       const pkt = stepGameTick(game);
       if (pkt.events.some((e) => e.reason === 'wall' && e.victimNumId === p1.numId)) {
         wallDeath = true;
@@ -130,11 +131,11 @@ describe('Paper.io Circular 360° Game Engine', () => {
       }
     }
 
-    expect(wallDeath).toBe(true);
-    expect(p1.alive).toBe(false);
-    expect(game.ended).toBe(true);
-    expect(game.winReason).toBe('last_standing');
-    expect(game.winnerNumId).toBe(p2.numId);
+    expect(wallDeath).toBe(false);
+    expect(p1.alive).toBe(true);
+    expect(isPointInArena(p1.x, p1.y)).toBe(true);
+    expect(ARENA_MASK[p1.cellY * game.width + p1.cellX]).toBe(1);
+    expect(game.ended).toBe(false);
   });
 
   it('maintains watertight curved trail and flood-fills enclosed interior on return', () => {
@@ -227,10 +228,14 @@ describe('Paper.io Circular 360° Game Engine', () => {
     const h2 = makeHuman(2);
     const twoHumanGame = createPaperGame([h1, h2], 2, 'time_3m');
     const p1 = twoHumanGame.players.find((p) => p.id === h1.id)!;
+    const p2 = twoHumanGame.players.find((p) => p.id === h2.id)!;
 
-    for (let tick = 0; tick < 500 && p1.alive && !twoHumanGame.ended; tick++) {
-      const outwardAngle = Math.atan2(p1.y - ARENA_CENTER_Y, p1.x - ARENA_CENTER_X);
-      setPlayerTargetAngle(twoHumanGame, h1.id, outwardAngle);
+    resetPlayerDisk(twoHumanGame, p1.numId, 80, 80, 0);
+    resetPlayerDisk(twoHumanGame, p2.numId, 85, 72, Math.PI / 2);
+
+    for (let tick = 0; tick < 60 && p1.alive && !twoHumanGame.ended; tick++) {
+      setPlayerTargetAngle(twoHumanGame, h1.id, 0);
+      setPlayerTargetAngle(twoHumanGame, h2.id, Math.PI / 2);
       stepGameTick(twoHumanGame);
     }
 
@@ -246,10 +251,13 @@ describe('Paper.io Circular 360° Game Engine', () => {
     const soloHuman = makeHuman(1);
     const soloGame = createPaperGame([soloHuman], 3, 'time_3m');
     const soloPlayer = soloGame.players.find((p) => p.id === soloHuman.id)!;
+    const soloBot = soloGame.players[1];
 
-    for (let tick = 0; tick < 500 && !soloGame.ended; tick++) {
-      const outwardAngle = Math.atan2(soloPlayer.y - ARENA_CENTER_Y, soloPlayer.x - ARENA_CENTER_X);
-      setPlayerTargetAngle(soloGame, soloHuman.id, outwardAngle);
+    resetPlayerDisk(soloGame, soloPlayer.numId, 80, 80, 0);
+    resetPlayerDisk(soloGame, soloBot.numId, 85, 75, Math.PI / 2);
+
+    for (let tick = 0; tick < 60 && !soloGame.ended; tick++) {
+      setPlayerTargetAngle(soloGame, soloHuman.id, 0);
       stepGameTick(soloGame);
     }
 

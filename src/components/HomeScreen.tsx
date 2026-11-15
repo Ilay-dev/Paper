@@ -142,7 +142,7 @@ export function HomeScreen({
               <li>Dein Block folgt in der runden Arena stufenlos deinem Mauszeiger (oder Finger).</li>
               <li>Verlasse dein Gebiet, ziehe eine Spur und kehre zurück, um die gesamte umschlossene Fläche zu erobern.</li>
               <li>Schneidest du eine gegnerische Spur durch, wird der Gegner sofort eliminiert.</li>
-              <li>Achte auf deine eigene Spur und den Kreisrand der Arena — beides ist tödlich!</li>
+              <li>Achte auf deine eigene Spur — sie zu kreuzen ist tödlich! Der Kreisrand der Arena begrenzt nur das Spielfeld.</li>
               <li>Wähle in der Lobby zwischen Zeitmodus (3 / 5 Min) und Knockout ohne Respawn sowie 0–30 KI-Bots.</li>
             </ul>
           </div>
