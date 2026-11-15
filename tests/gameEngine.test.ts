@@ -20,6 +20,7 @@ import {
   shortestAngleDiff,
   stepGameTick,
 } from '../shared/gameEngine.ts';
+import { extractSmoothPlayerLoops } from '../src/utils/contour.ts';
 
 function makeHuman(idx: number): InternalLobbyHuman {
   return {
@@ -218,6 +219,56 @@ describe('Paper.io Circular 360° Game Engine', () => {
     }
     for (const p of game.players) {
       expect(p.areaCells).toBe(actualCounts.get(p.numId) ?? 0);
+    }
+  });
+
+  it('prevents respawning after elimination and ends the round when all humans die', () => {
+    const h1 = makeHuman(1);
+    const h2 = makeHuman(2);
+    const twoHumanGame = createPaperGame([h1, h2], 2, 'time_3m');
+    const p1 = twoHumanGame.players.find((p) => p.id === h1.id)!;
+
+    for (let tick = 0; tick < 500 && p1.alive && !twoHumanGame.ended; tick++) {
+      const outwardAngle = Math.atan2(p1.y - ARENA_CENTER_Y, p1.x - ARENA_CENTER_X);
+      setPlayerTargetAngle(twoHumanGame, h1.id, outwardAngle);
+      stepGameTick(twoHumanGame);
+    }
+
+    expect(p1.alive).toBe(false);
+    expect(p1.respawnTicks).toBe(0);
+
+    for (let tick = 0; tick < 120; tick++) {
+      stepGameTick(twoHumanGame);
+      expect(p1.alive).toBe(false);
+      expect(p1.respawnTicks).toBe(0);
+    }
+
+    const soloHuman = makeHuman(1);
+    const soloGame = createPaperGame([soloHuman], 3, 'time_3m');
+    const soloPlayer = soloGame.players.find((p) => p.id === soloHuman.id)!;
+
+    for (let tick = 0; tick < 500 && !soloGame.ended; tick++) {
+      const outwardAngle = Math.atan2(soloPlayer.y - ARENA_CENTER_Y, soloPlayer.x - ARENA_CENTER_X);
+      setPlayerTargetAngle(soloGame, soloHuman.id, outwardAngle);
+      stepGameTick(soloGame);
+    }
+
+    expect(soloPlayer.alive).toBe(false);
+    expect(soloPlayer.respawnTicks).toBe(0);
+    expect(soloGame.ended).toBe(true);
+    expect(soloGame.winReason).toBe('eliminated');
+  });
+
+  it('extracts smooth multi-point rounded contour loops for spawned territories', () => {
+    const h1 = makeHuman(1);
+    const game = createPaperGame([h1], 3, 'time_3m');
+    const loopsByPlayer = extractSmoothPlayerLoops(game.ownerGrid, game.width, game.height);
+
+    for (const player of game.players) {
+      const loops = loopsByPlayer.get(player.numId);
+      expect(loops).toBeDefined();
+      expect(loops!.length).toBeGreaterThanOrEqual(1);
+      expect(loops![0].length).toBeGreaterThanOrEqual(24);
     }
   });
 });

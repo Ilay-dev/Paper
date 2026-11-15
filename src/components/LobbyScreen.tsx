@@ -130,10 +130,10 @@ export function LobbyScreen({
               </div>
               <p className="text-xs text-zinc-500 leading-relaxed">
                 {room.gameMode === 'time_3m'
-                  ? '3 Minuten Zeitmodus mit Respawn — größte Fläche gewinnt.'
+                  ? '3 Minuten Zeitmodus ohne Respawn — stirbst du, startest du eine neue Runde.'
                   : room.gameMode === 'time_5m'
-                    ? '5 Minuten Arena-Schlacht mit Respawn — größte Fläche gewinnt.'
-                    : 'Knockout: Kein Respawn nach Eliminierung — letzter Überlebender gewinnt.'}
+                    ? '5 Minuten Arena-Schlacht ohne Respawn — größte Fläche gewinnt.'
+                    : 'Knockout ohne Respawn — der letzte Überlebende gewinnt die Runde.'}
               </p>
             </div>
 
@@ -209,7 +209,10 @@ export function LobbyScreen({
                   max={MAX_BOTS}
                   value={room.botCount}
                   onChange={(e) => onSetBotCount(Number(e.target.value))}
-                  className="flex-1 accent-white cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                  style={{
+                    background: `linear-gradient(to right, #ffffff ${(room.botCount / MAX_BOTS) * 100}%, rgba(255, 255, 255, 0.12) ${(room.botCount / MAX_BOTS) * 100}%)`,
+                  }}
+                  className="paper-slider flex-1"
                 />
                 <div className="flex items-center gap-1 flex-wrap">
                   {BOT_PRESETS.map((preset) => (

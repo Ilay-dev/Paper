@@ -100,7 +100,7 @@ export interface MatchStanding {
 export interface MatchSummary {
   mode: GameMode;
   durationMs: number;
-  winReason: 'time' | 'conquest' | 'last_standing';
+  winReason: 'time' | 'conquest' | 'last_standing' | 'eliminated';
   winnerId: string | null;
   winnerName: string;
   winnerColorIndex: number;

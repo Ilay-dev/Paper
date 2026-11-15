@@ -3,6 +3,7 @@ export interface PlayerColorMeta {
   labelDe: string;
   hex: string;
   territoryHex: string;
+  extrudeHex: string;
   territoryBorderHex: string;
   trailHex: string;
   softBg: string;
@@ -73,16 +74,17 @@ function createColorMeta(index: number, hex: string, labelDe: string): PlayerCol
     index,
     labelDe,
     hex,
-    territoryHex: mixHex(hex, '#070709', 0.44),
-    territoryBorderHex: mixHex(hex, '#070709', 0.72),
-    trailHex: `rgba(${r}, ${g}, ${b}, 0.52)`,
-    softBg: `rgba(${r}, ${g}, ${b}, 0.14)`,
-    border: `rgba(${r}, ${g}, ${b}, 0.45)`,
+    territoryHex: mixHex(hex, '#09090D', 0.68),
+    extrudeHex: mixHex(hex, '#050507', 0.42),
+    territoryBorderHex: mixHex(hex, '#050507', 0.48),
+    trailHex: `rgba(${r}, ${g}, ${b}, 0.56)`,
+    softBg: `rgba(${r}, ${g}, ${b}, 0.16)`,
+    border: `rgba(${r}, ${g}, ${b}, 0.48)`,
   };
 }
 
 const PRIMARY_HUMAN_PALETTE: Array<{ hex: string; labelDe: string }> = [
-  { hex: '#ef4444', labelDe: 'Rot' },
+  { hex: '#f43f5e', labelDe: 'Rosa-Rot' },
   { hex: '#3b82f6', labelDe: 'Blau' },
   { hex: '#f59e0b', labelDe: 'Gold' },
   { hex: '#10b981', labelDe: 'Smaragd' },
@@ -116,4 +118,3 @@ export function getPlayerColor(colorIndex: number): PlayerColorMeta {
   }
   return PLAYER_COLORS[Math.abs(colorIndex) % PLAYER_COLORS.length];
 }
-

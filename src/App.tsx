@@ -43,6 +43,7 @@ export default function App() {
     removeBot,
     removePlayer,
     returnToLobby,
+    restartMatch,
     sendAngleInput,
   } = usePaperSocket({
     onCapture: playCaptureSound,
@@ -143,6 +144,7 @@ export default function App() {
           onToggleSound={toggleSound}
           onSendAngle={sendAngleInput}
           onToggleReady={toggleReady}
+          onRestartMatch={restartMatch}
           onReturnToLobby={returnToLobby}
           onLeave={() => void handleLeaveRoom()}
           onPlayWinSound={playWinSound}

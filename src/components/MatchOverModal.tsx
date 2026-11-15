@@ -1,10 +1,11 @@
-import { Bot, Check, RotateCcw, Trophy } from 'lucide-react';
+import { Bot, Check, Play, RotateCcw, Trophy } from 'lucide-react';
 import { getPlayerColor } from '../../shared/colors.ts';
 import type { ClientRoomState } from '../../shared/types.ts';
 
 interface MatchOverModalProps {
   room: ClientRoomState;
   onToggleReady: () => void;
+  onRestartMatch: () => void;
   onReturnToLobby: () => void;
 }
 
@@ -18,6 +19,7 @@ function formatDuration(ms: number): string {
 export function MatchOverModal({
   room,
   onToggleReady,
+  onRestartMatch,
   onReturnToLobby,
 }: MatchOverModalProps) {
   const summary = room.matchSummary;
@@ -31,9 +33,11 @@ export function MatchOverModal({
   const reasonLabel =
     summary.winReason === 'conquest'
       ? 'Totale Eroberung'
-      : summary.winReason === 'last_standing'
-        ? 'Letzter Überlebender'
-        : 'Zeit abgelaufen';
+      : summary.winReason === 'eliminated'
+        ? 'Ausgeschieden · Runde beendet'
+        : summary.winReason === 'last_standing'
+          ? 'Letzter Überlebender'
+          : 'Zeit abgelaufen';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
@@ -50,7 +54,11 @@ export function MatchOverModal({
               className="w-3 h-3 rounded-full inline-block"
               style={{ backgroundColor: winnerMeta.hex }}
             />
-            <span>{summary.winnerName} gewinnt!</span>
+            <span>
+              {summary.winReason === 'eliminated'
+                ? `Runde vorbei — ${summary.winnerName} führt`
+                : `${summary.winnerName} gewinnt!`}
+            </span>
           </h2>
         </div>
 
@@ -107,22 +115,48 @@ export function MatchOverModal({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={onToggleReady}
-              className={`w-full rounded-xl py-3 px-4 text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2 ${
-                me?.isReady
-                  ? 'border border-white/25 bg-white/[0.08] text-white'
-                  : 'bg-white text-black hover:bg-zinc-200'
-              }`}
-            >
-              {me?.isReady && <Check className="w-4 h-4" />}
-              <span>
-                {me?.isReady
-                  ? `Bereit für Rematch (${readyCount}/${room.humanPlayers.length})`
-                  : 'Rematch bereit'}
-              </span>
-            </button>
+            {isHost ? (
+              <button
+                type="button"
+                onClick={onRestartMatch}
+                className="w-full rounded-xl bg-white text-black py-3.5 px-4 text-xs sm:text-sm font-semibold hover:bg-zinc-200 transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                <span>Neue Runde starten</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onToggleReady}
+                className={`w-full rounded-xl py-3 px-4 text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2 ${
+                  me?.isReady
+                    ? 'border border-white/25 bg-white/[0.08] text-white'
+                    : 'bg-white text-black hover:bg-zinc-200'
+                }`}
+              >
+                {me?.isReady && <Check className="w-4 h-4" />}
+                <span>
+                  {me?.isReady
+                    ? `Bereit für neue Runde (${readyCount}/${room.humanPlayers.length})`
+                    : 'Bereit für neue Runde'}
+                </span>
+              </button>
+            )}
+
+            {isHost && room.humanPlayers.length > 1 && (
+              <button
+                type="button"
+                onClick={onToggleReady}
+                className="w-full rounded-xl border border-white/15 bg-white/[0.05] py-2.5 px-4 text-xs text-zinc-200 hover:bg-white/[0.1] transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {me?.isReady && <Check className="w-3.5 h-3.5" />}
+                <span>
+                  {me?.isReady
+                    ? `Bereit (${readyCount}/${room.humanPlayers.length})`
+                    : 'Countdown-Bereit melden'}
+                </span>
+              </button>
+            )}
 
             {isHost && (
               <button
@@ -140,4 +174,3 @@ export function MatchOverModal({
     </div>
   );
 }
-

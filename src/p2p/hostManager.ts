@@ -469,6 +469,18 @@ export class BrowserHostManager {
         return { ok: true };
       }
 
+      case 'room:restart_match': {
+        if (player.id !== this.room.hostId) {
+          return { ok: false, error: 'Nur der Host kann eine neue Runde starten.' };
+        }
+        const totalEntities = this.room.humanPlayers.length + this.room.botCount;
+        if (totalEntities < 2) {
+          return { ok: false, error: 'Mindestens 2 Teilnehmer benötigt.' };
+        }
+        this.startNewMatch();
+        return { ok: true };
+      }
+
       default:
         return { ok: false, error: 'Unbekannte Aktion.' };
     }

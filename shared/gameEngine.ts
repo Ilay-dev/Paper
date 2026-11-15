@@ -26,7 +26,7 @@ export const MOVE_STEP_PER_TICK = MOVE_SPEED_CELLS_PER_SEC / TICKS_PER_SECOND; /
 export const MAX_TURN_RATE_RAD_PER_SEC = 5.4;
 export const MAX_TURN_STEP_PER_TICK = MAX_TURN_RATE_RAD_PER_SEC / TICKS_PER_SECOND; // 0.18 rad/tick
 
-export const RESPAWN_TICKS = 75; // 2.5 seconds
+export const RESPAWN_TICKS = 0; // No respawn — elimination requires a new round
 export const SPAWN_SHIELD_TICKS = 45; // 1.5 seconds
 export const CONQUEST_WIN_PCT = 99.5;
 export const MAX_CELL_DIFF_TRIPLETS = 1400;
@@ -262,7 +262,7 @@ export interface InternalPaperGame {
   recentEvents: KillFeedEvent[];
 
   ended: boolean;
-  winReason: 'time' | 'conquest' | 'last_standing' | null;
+  winReason: 'time' | 'conquest' | 'last_standing' | 'eliminated' | null;
   winnerNumId: number | null;
 }
 
@@ -316,9 +316,12 @@ function findBestSpawnSpot(game: InternalPaperGame): { cx: number; cy: number } 
     }
 
     let occupiedCount = 0;
-    for (let dy = -2; dy <= 2; dy++) {
-      for (let dx = -2; dx <= 2; dx++) {
-        const idx = (cy + dy) * game.width + (cx + dx);
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        const gx = cx + dx;
+        const gy = cy + dy;
+        if (gx < 0 || gx >= game.width || gy < 0 || gy >= game.height) continue;
+        const idx = gy * game.width + gx;
         if (game.trailGrid[idx] !== 0) occupiedCount += 5;
         else if (game.ownerGrid[idx] !== 0) occupiedCount += 1;
       }
@@ -340,10 +343,10 @@ export function spawnPlayer(game: InternalPaperGame, player: InternalArenaPlayer
   const { cx, cy } = findBestSpawnSpot(game);
 
   player.trailCells.length = 0;
-  // Claim circular starting base (r <= 2.4 cells -> 21 cells disk)
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      if (dx * dx + dy * dy > 5.8) continue;
+  // Claim plump circular starting base (r <= 3.24 cells -> ~37 cells smooth disk)
+  for (let dy = -3; dy <= 3; dy++) {
+    for (let dx = -3; dx <= 3; dx++) {
+      if (dx * dx + dy * dy > 10.5) continue;
       const gx = cx + dx;
       const gy = cy + dy;
       if (gx < 0 || gx >= game.width || gy < 0 || gy >= game.height) continue;
@@ -580,7 +583,7 @@ function eliminatePlayer(
 
   victim.alive = false;
   victim.deaths += 1;
-  victim.respawnTicks = game.mode === 'survival' ? 0 : RESPAWN_TICKS;
+  victim.respawnTicks = 0;
   victim.shieldTicks = 0;
   victim.areaCells = 0;
 
@@ -608,8 +611,31 @@ function eliminatePlayer(
 }
 
 function closeLoopAndCapture(game: InternalPaperGame, player: InternalArenaPlayer): number[] {
+  const stolenFromNumIds = new Set<number>();
+
+  // Stamp trail cells + 4-neighbors for smooth, organic rounded ribbon captures
   for (const idx of player.trailCells) {
-    setOwnerCell(game, idx, player.numId);
+    const cx = idx % game.width;
+    const cy = (idx / game.width) | 0;
+    const offsets = [
+      [0, 0],
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+    for (const [ox, oy] of offsets) {
+      const nx = cx + ox;
+      const ny = cy + oy;
+      if (nx < 0 || nx >= game.width || ny < 0 || ny >= game.height) continue;
+      const nIdx = ny * game.width + nx;
+      if (ARENA_MASK[nIdx] === 0) continue;
+      const prevOwner = game.ownerGrid[nIdx];
+      if (prevOwner !== 0 && prevOwner !== player.numId) {
+        stolenFromNumIds.add(prevOwner);
+      }
+      setOwnerCell(game, nIdx, player.numId);
+    }
     if (game.trailGrid[idx] === player.numId) {
       setTrailCell(game, idx, 0);
     }
@@ -727,7 +753,6 @@ function closeLoopAndCapture(game: InternalPaperGame, player: InternalArenaPlaye
     }
   }
 
-  const stolenFromNumIds = new Set<number>();
   for (let gy = minY; gy <= maxY; gy++) {
     const ly = gy - y0;
     const localRow = ly * bw;
@@ -953,18 +978,7 @@ export function stepGameTick(game: InternalPaperGame): FastTickPacket {
 
   let territoryChanged = false;
 
-  // 1. Handle respawns
-  for (const player of game.players) {
-    if (!player.alive && game.mode !== 'survival' && player.respawnTicks > 0) {
-      player.respawnTicks -= 1;
-      if (player.respawnTicks <= 0) {
-        spawnPlayer(game, player);
-        territoryChanged = true;
-      }
-    }
-  }
-
-  // 2. Bot steering, smooth angle interpolation & continuous movement
+  // 1. Bot steering, smooth angle interpolation & continuous movement (no respawns)
   interface StepResult {
     player: InternalArenaPlayer;
     visitedCells: Array<{ cx: number; cy: number }>;
@@ -1135,7 +1149,24 @@ function checkWinConditions(game: InternalPaperGame): void {
     }
   }
 
-  if (game.mode === 'survival' && game.players.length >= 2) {
+  // If all human players are eliminated (no respawn), end the round immediately
+  const humanPlayers = game.players.filter((p) => !p.isBot);
+  if (humanPlayers.length > 0 && humanPlayers.every((p) => !p.alive)) {
+    game.ended = true;
+    game.winReason = 'eliminated';
+    const sorted = [...game.players].sort((a, b) => {
+      if (a.alive !== b.alive) return a.alive ? -1 : 1;
+      return (
+        b.areaCells - a.areaCells ||
+        b.maxAreaCells - a.maxAreaCells ||
+        b.kills - a.kills
+      );
+    });
+    game.winnerNumId = sorted[0]?.numId ?? null;
+    return;
+  }
+
+  if (game.players.length >= 2) {
     const alivePlayers = game.players.filter((p) => p.alive);
     if (alivePlayers.length <= 1) {
       game.ended = true;

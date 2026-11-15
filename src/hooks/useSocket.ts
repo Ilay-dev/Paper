@@ -82,6 +82,7 @@ export interface LiveArenaPlayer {
   maxAreaCells: number;
   kills: number;
   deaths: number;
+  trailPoints: Array<{ x: number; y: number }>;
 }
 
 export interface DeathBurst {
@@ -125,6 +126,8 @@ export interface HudSnapshot {
   }>;
   myPlayer: {
     numId: number;
+    name: string;
+    colorIndex: number;
     alive: boolean;
     respawnSeconds: number;
     areaPct: number;
@@ -278,6 +281,7 @@ export function usePaperSocket(soundCues?: SoundCueCallbacks) {
           maxAreaCells: meta.maxAreaCells,
           kills: meta.kills,
           deaths: meta.deaths,
+          trailPoints: [],
         });
       }
     }
@@ -320,6 +324,8 @@ export function usePaperSocket(soundCues?: SoundCueCallbacks) {
       if (liveMe) {
         myPlayer = {
           numId: liveMe.numId,
+          name: liveMe.name,
+          colorIndex: liveMe.colorIndex,
           alive: liveMe.alive,
           respawnSeconds: Number((liveMe.respawnTicks / 30).toFixed(1)),
           areaPct: Number(((liveMe.areaCells / total) * 100).toFixed(2)),
@@ -445,6 +451,32 @@ export function usePaperSocket(soundCues?: SoundCueCallbacks) {
           existing.kills = kills;
           existing.deaths = deaths;
           existing.shieldTicks = shieldTicks;
+
+          const cx = Math.floor(x);
+          const cy = Math.floor(y);
+          const onOwn =
+            alive &&
+            cx >= 0 &&
+            cx < arena.width &&
+            cy >= 0 &&
+            cy < arena.height &&
+            arena.ownerGrid[cy * arena.width + cx] === numId;
+
+          if (!alive || onOwn) {
+            if (existing.trailPoints.length > 0) {
+              existing.trailPoints.length = 0;
+            }
+          } else {
+            if (existing.trailPoints.length === 0) {
+              existing.trailPoints.push({ x: existing.prevX, y: existing.prevY });
+              existing.trailPoints.push({ x, y });
+            } else {
+              const lastPt = existing.trailPoints[existing.trailPoints.length - 1];
+              if (Math.hypot(x - lastPt.x, y - lastPt.y) >= 0.35) {
+                existing.trailPoints.push({ x, y });
+              }
+            }
+          }
         } else {
           arena.players.set(numId, {
             id: `p-${numId}`,
@@ -465,6 +497,7 @@ export function usePaperSocket(soundCues?: SoundCueCallbacks) {
             maxAreaCells,
             kills,
             deaths,
+            trailPoints: [],
           });
         }
       }
@@ -1009,6 +1042,10 @@ export function usePaperSocket(soundCues?: SoundCueCallbacks) {
     void dispatchAction('room:next_round');
   }, [dispatchAction]);
 
+  const restartMatch = useCallback(() => {
+    void dispatchAction('room:restart_match');
+  }, [dispatchAction]);
+
   return {
     connected,
     roomState,
@@ -1027,6 +1064,7 @@ export function usePaperSocket(soundCues?: SoundCueCallbacks) {
     removeBot,
     removePlayer,
     returnToLobby,
+    restartMatch,
     sendAngleInput,
   };
 }

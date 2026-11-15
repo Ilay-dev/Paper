@@ -6,6 +6,7 @@ import {
   HelpCircle,
   LogOut,
   MousePointer2,
+  RotateCcw,
   Skull,
   Volume2,
   VolumeX,
@@ -27,6 +28,7 @@ interface GameTableProps {
   onToggleSound: () => void;
   onSendAngle: (angle: number) => void;
   onToggleReady: () => void;
+  onRestartMatch: () => void;
   onReturnToLobby: () => void;
   onLeave: () => void;
   onPlayWinSound: () => void;
@@ -48,6 +50,7 @@ export function GameTable({
   onToggleSound,
   onSendAngle,
   onToggleReady,
+  onRestartMatch,
   onReturnToLobby,
   onLeave,
   onPlayWinSound,
@@ -84,9 +87,12 @@ export function GameTable({
         ? '5 Min'
         : 'Knockout';
 
+  const isHost = room.hostId === room.myPlayerId;
   const myStats = hud?.myPlayer ?? null;
+  const myColorMeta = myStats ? getPlayerColor(myStats.colorIndex) : getPlayerColor(0);
   const totalEntities = room.arenaPlayers.length;
   const aliveCount = Array.from(liveArenaRef.current.players.values()).filter((p) => p.alive).length;
+  const topFive = hud?.leaderboard.slice(0, 5) ?? [];
 
   return (
     <div className="h-screen w-screen bg-black text-white flex flex-col overflow-hidden select-none">
@@ -165,7 +171,7 @@ export function GameTable({
         <div className="border-b border-white/[0.06] bg-[#070709] px-4 py-2.5 text-xs text-zinc-400 z-20 shrink-0">
           <div className="max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <span>
-              <strong className="text-white">Steuerung:</strong> Bewege deinen Mauszeiger (oder Finger) in die gewünschte Richtung — dein Block folgt dem Cursor in der runden Arena · Verlasse dein Gebiet und kehre zurück, um Fläche zu erobern · Schneide gegnerische Spuren durch.
+              <strong className="text-white">Steuerung:</strong> Bewege deinen Mauszeiger (oder Finger) in die gewünschte Richtung — dein Block folgt dem Cursor in der runden Arena · Kein Respawn: Stirbst du, startet eine neue Runde.
             </span>
             <button
               type="button"
@@ -187,151 +193,161 @@ export function GameTable({
           onAngleInput={handleAngle}
         />
 
-        {/* Top-Left: Kill Feed */}
-        {hud && hud.events.length > 0 && (
-          <div className="pointer-events-none absolute top-3 left-3 z-10 space-y-1.5 max-w-[260px] sm:max-w-xs">
-            {hud.events.slice(0, 4).map((evt) => {
-              const victimColor = getPlayerColor(evt.victimColorIndex);
-              const killerColor =
-                evt.killerColorIndex !== null ? getPlayerColor(evt.killerColorIndex) : null;
+        {/* Top-Left: Paper.io 2 Style Progress Pill + Best + Kills + Kill Feed */}
+        {myStats && (
+          <div className="pointer-events-none absolute top-3.5 left-3.5 z-10 space-y-1.5">
+            <div
+              style={{
+                backgroundColor: myColorMeta.territoryHex,
+                borderColor: myColorMeta.hex,
+              }}
+              className="rounded-full border px-4 py-1 min-w-[155px] sm:min-w-[195px] shadow-[0_6px_20px_rgba(0,0,0,0.65)] flex items-center justify-between gap-3"
+            >
+              <span className="font-mono-code text-sm font-bold text-white drop-shadow">
+                {myStats.areaPct.toFixed(2)}%
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/75">
+                #{myStats.rank}
+              </span>
+            </div>
+
+            <div className="pl-1 space-y-1">
+              <div className="text-[11px] font-bold tracking-wide text-zinc-400">
+                BESTE {myStats.maxAreaPct.toFixed(2)}%
+              </div>
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#09090C]/90 px-2.5 py-0.5 text-[11px] font-bold text-white shadow">
+                <Skull className="w-3 h-3 text-zinc-300" />
+                <span className="font-mono-code">x{myStats.kills}</span>
+              </div>
+            </div>
+
+            {hud && hud.events.length > 0 && (
+              <div className="pt-2 space-y-1 max-w-[250px]">
+                {hud.events.slice(0, 3).map((evt) => {
+                  const victimColor = getPlayerColor(evt.victimColorIndex);
+                  const killerColor =
+                    evt.killerColorIndex !== null ? getPlayerColor(evt.killerColorIndex) : null;
+                  return (
+                    <div
+                      key={evt.id}
+                      className="animate-feed-in rounded-full border border-white/[0.08] bg-[#08080A]/85 backdrop-blur-sm px-2.5 py-1 text-[10px] flex items-center gap-1.5 shadow-lg"
+                    >
+                      {evt.killerName && killerColor ? (
+                        <>
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: killerColor.hex }}
+                          />
+                          <span className="font-medium text-white truncate max-w-[75px]">
+                            {evt.killerName}
+                          </span>
+                          <span className="text-zinc-500">
+                            {evt.reason === 'wipeout' ? 'eroberte' : 'schnitt'}
+                          </span>
+                        </>
+                      ) : (
+                        <Skull className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
+                      )}
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: victimColor.hex }}
+                      />
+                      <span className="text-zinc-300 truncate max-w-[85px]">{evt.victimName}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Top-Right: Modern Dark Paper.io 2 Colored Pill Leaderboard */}
+        {topFive.length > 0 && (
+          <aside className="pointer-events-none absolute top-3.5 right-0 z-10 flex flex-col items-end gap-1.5">
+            {topFive.map((entry, idx) => {
+              const colorMeta = getPlayerColor(entry.colorIndex);
+              const isMe = entry.numId === room.myNumId;
               return (
                 <div
-                  key={evt.id}
-                  className="animate-feed-in rounded-lg border border-white/[0.08] bg-[#08080A]/88 backdrop-blur-sm px-2.5 py-1.5 text-[11px] flex items-center gap-1.5 shadow-lg"
+                  key={entry.id}
+                  style={{
+                    backgroundColor: colorMeta.territoryHex,
+                    borderColor: isMe ? '#ffffff' : colorMeta.border,
+                  }}
+                  className={`rounded-l-full border border-r-0 pl-3.5 pr-4 py-1 text-xs flex items-center gap-2 shadow-[0_4px_14px_rgba(0,0,0,0.6)] min-w-[165px] sm:min-w-[215px] ${
+                    !entry.alive ? 'opacity-45' : ''
+                  }`}
                 >
-                  {evt.killerName && killerColor ? (
-                    <>
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: killerColor.hex }}
-                      />
-                      <span className="font-medium text-white truncate max-w-[85px]">
-                        {evt.killerName}
-                      </span>
-                      <span className="text-zinc-500">
-                        {evt.reason === 'wipeout' ? 'eroberte' : 'schnitt'}
-                      </span>
-                    </>
-                  ) : (
-                    <Skull className="w-3 h-3 text-zinc-500 shrink-0" />
-                  )}
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: victimColor.hex }}
-                  />
-                  <span className="text-zinc-300 truncate max-w-[95px]">{evt.victimName}</span>
+                  <span className="font-mono-code font-bold text-white/90 shrink-0">
+                    {idx === 0 ? (
+                      <Crown className="w-3.5 h-3.5 text-amber-300 inline mr-0.5" />
+                    ) : (
+                      `${idx + 1}`
+                    )}
+                  </span>
+                  <span className="text-white/50">–</span>
+                  <span className="font-mono-code font-semibold text-white shrink-0">
+                    {entry.areaPct.toFixed(2)}%
+                  </span>
+                  <span className="truncate font-medium text-white/95 max-w-[95px]">
+                    {entry.name}
+                  </span>
+                  {entry.isBot && <Bot className="w-3 h-3 text-white/60 shrink-0 ml-auto" />}
                 </div>
               );
             })}
-          </div>
-        )}
 
-        {/* Top-Right: Live Leaderboard */}
-        {hud && hud.leaderboard.length > 0 && (
-          <aside className="pointer-events-none absolute top-3 right-3 z-10 w-44 sm:w-56 rounded-xl border border-white/[0.08] bg-[#08080A]/88 backdrop-blur-sm p-2.5 shadow-2xl">
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5 px-1">
-              <span>Rangliste</span>
-              <span className="font-mono-code">Fläche</span>
-            </div>
-            <ul className="space-y-1">
-              {hud.leaderboard.map((entry, idx) => {
-                const colorMeta = getPlayerColor(entry.colorIndex);
-                const isMe = entry.numId === room.myNumId;
-                return (
-                  <li
-                    key={entry.id}
-                    className={`flex items-center justify-between gap-1.5 rounded-md px-1.5 py-1 text-[11px] ${
-                      isMe ? 'bg-white/[0.1] text-white font-semibold' : 'text-zinc-300'
-                    } ${!entry.alive ? 'opacity-45' : ''}`}
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-mono-code text-[10px] text-zinc-500 w-3 shrink-0">
-                        {idx === 0 ? (
-                          <Crown className="w-3 h-3 text-amber-400" />
-                        ) : (
-                          `${idx + 1}`
-                        )}
-                      </span>
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: colorMeta.hex }}
-                      />
-                      <span className="truncate">{entry.name}</span>
-                      {entry.isBot && <Bot className="w-2.5 h-2.5 text-zinc-500 shrink-0" />}
-                    </div>
-                    <span className="font-mono-code text-[10px] text-zinc-200 shrink-0">
-                      {entry.areaPct.toFixed(1)}%
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+            {myStats && myStats.rank > 5 && (
+              <div
+                style={{
+                  backgroundColor: myColorMeta.territoryHex,
+                  borderColor: myColorMeta.hex,
+                }}
+                className={`mt-2 rounded-l-full border border-r-0 pl-3.5 pr-4 py-1 text-xs flex items-center gap-2 shadow-[0_4px_14px_rgba(0,0,0,0.6)] min-w-[165px] sm:min-w-[215px] ${
+                  !myStats.alive ? 'opacity-60' : ''
+                }`}
+              >
+                <span className="font-mono-code font-bold text-white shrink-0">
+                  {myStats.rank}
+                </span>
+                <span className="text-white/50">–</span>
+                <span className="font-mono-code font-semibold text-white shrink-0">
+                  {myStats.areaPct.toFixed(2)}%
+                </span>
+                <span className="truncate font-semibold text-white max-w-[95px]">
+                  {myStats.name}
+                </span>
+              </div>
+            )}
           </aside>
         )}
 
-        {/* Bottom-Left: Player Live Stats Pill */}
-        {myStats && (
-          <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-10 rounded-xl border border-white/[0.09] bg-[#08080A]/90 backdrop-blur-sm px-3.5 py-2.5 flex items-center gap-4 shadow-2xl">
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">Fläche</div>
-              <div className="font-mono-code text-sm sm:text-base font-bold text-white">
-                {myStats.areaPct.toFixed(1)}%
-              </div>
-            </div>
-            <div className="h-6 w-px bg-white/[0.08]" />
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">Kills</div>
-              <div className="font-mono-code text-sm sm:text-base font-bold text-white">
-                {myStats.kills}
-              </div>
-            </div>
-            <div className="hidden sm:block h-6 w-px bg-white/[0.08]" />
-            <div className="hidden sm:block">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">Rang</div>
-              <div className="font-mono-code text-sm sm:text-base font-bold text-zinc-200">
-                #{myStats.rank}/{totalEntities}
-              </div>
-            </div>
-            <div className="hidden sm:block h-6 w-px bg-white/[0.08]" />
-            <div className="hidden sm:block">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">Best</div>
-              <div className="font-mono-code text-sm sm:text-base font-bold text-zinc-300">
-                {myStats.maxAreaPct.toFixed(1)}%
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Center/Bottom Respawn or Spectator Overlay when dead */}
+        {/* Spectator Overlay when dead while another human player is still alive */}
         {room.phase === 'playing' && myStats && !myStats.alive && (
-          <div className="pointer-events-auto absolute bottom-20 left-1/2 -translate-x-1/2 z-10 rounded-2xl border border-white/15 bg-[#09090B]/92 backdrop-blur-md px-5 py-3 flex items-center gap-4 shadow-2xl animate-pop-in">
-            {room.gameMode === 'survival' ? (
-              <>
-                <div className="flex items-center gap-2 text-xs">
-                  <Eye className="w-4 h-4 text-zinc-400" />
-                  <div>
-                    <div className="font-semibold text-white">Ausgeschieden</div>
-                    <div className="text-[11px] text-zinc-400">Spectator-Modus aktiv</div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={cycleSpectateTarget}
-                  className="rounded-lg bg-white text-black px-3 py-1.5 text-xs font-semibold hover:bg-zinc-200 transition-colors cursor-pointer"
-                >
-                  Nächster Spieler
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-2.5 text-xs">
-                <Skull className="w-4 h-4 text-zinc-400" />
-                <div>
-                  <div className="font-semibold text-white">Eliminiert!</div>
-                  <div className="text-[11px] font-mono-code text-zinc-400">
-                    Respawn in {myStats.respawnSeconds.toFixed(1)}s…
-                  </div>
-                </div>
+          <div className="pointer-events-auto absolute bottom-6 left-1/2 -translate-x-1/2 z-10 rounded-2xl border border-white/15 bg-[#09090B]/92 backdrop-blur-md px-5 py-3 flex items-center gap-3 shadow-2xl animate-pop-in">
+            <div className="flex items-center gap-2 text-xs">
+              <Eye className="w-4 h-4 text-zinc-400" />
+              <div>
+                <div className="font-semibold text-white">Ausgeschieden</div>
+                <div className="text-[11px] text-zinc-400">Kein Respawn · Spectator aktiv</div>
               </div>
+            </div>
+            <button
+              type="button"
+              onClick={cycleSpectateTarget}
+              className="rounded-lg border border-white/15 bg-white/[0.06] text-white px-3 py-1.5 text-xs font-medium hover:bg-white/[0.14] transition-colors cursor-pointer"
+            >
+              Nächster Spieler
+            </button>
+            {isHost && (
+              <button
+                type="button"
+                onClick={onRestartMatch}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-white text-black px-3 py-1.5 text-xs font-semibold hover:bg-zinc-200 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Neue Runde</span>
+              </button>
             )}
           </div>
         )}
@@ -341,6 +357,7 @@ export function GameTable({
         <MatchOverModal
           room={room}
           onToggleReady={onToggleReady}
+          onRestartMatch={onRestartMatch}
           onReturnToLobby={onReturnToLobby}
         />
       )}
